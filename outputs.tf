@@ -19,3 +19,20 @@ output "rds_port" {
   value       = aws_db_instance.postgres.port
 }
 
+# AWS CLI やワークフローから run-task を組み立てやすくする。
+output "private_subnet_ids" {
+  description = "プライベートサブネットの ID 一覧"
+  value       = [for subnet in aws_subnet.private : subnet.id]
+}
+output "ecs_service_security_group_id" {
+  description = "ECS サービス／マイグレーションタスクで利用するセキュリティグループ ID"
+  value       = aws_security_group.ecs_service.id
+}
+output "ecs_cluster_name" {
+  description = "ECS クラスター名"
+  value       = aws_ecs_cluster.this.name
+}
+output "migration_task_definition_arn" {
+  description = "マイグレーション用 ECS タスク定義 ARN"
+  value       = aws_ecs_task_definition.migration.arn
+}

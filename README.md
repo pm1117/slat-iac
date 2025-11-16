@@ -43,6 +43,8 @@ terraform apply -var-file=terraform.tfvars
 - `alb_dns_name` … NestJS API へアクセスする ALB の DNS 名  
 - `rds_endpoint` / `rds_port` … アプリケーションから接続する PostgreSQL のエンドポイント  
 - `vpc_id` … 作成された VPC の ID
+- `private_subnet_ids` / `ecs_service_security_group_id` … マイグレーションタスク等で利用するネットワーク情報  
+- `migration_task_definition_arn` / `ecs_cluster_name` … マイグレーション用 ECS タスク定義とクラスター名
 
 ## 4. クリーンアップ
 検証環境を削除したい場合は以下を実行します（RDS や NAT Gateway の料金が継続しないよう注意）。
@@ -50,6 +52,24 @@ terraform apply -var-file=terraform.tfvars
 ```bash
 terraform destroy -var-file=terraform.tfvars
 ```
+
+## 5. Prisma マイグレーションを VPC 内で実行する
+GitHub Actions などの外部から直接 RDS にアクセスできない構成のため、Terraform ではマイグレーション専用の ECS タスク定義を用意しています。最新イメージを ECR に Push したあと、以下のように実行すると RDS と同じ VPC 内で `npm run prisma migrate deploy` が動作します。
+
+```bash
+CLUSTER=$(terraform output -raw ecs_cluster_name)
+TASK_DEF=$(terraform output -raw migration_task_definition_arn)
+SUBNETS=$(terraform output -json private_subnet_ids | jq -r 'join(",")')
+SG=$(terraform output -raw ecs_service_security_group_id)
+
+aws ecs run-task \
+  --cluster "${CLUSTER}" \
+  --task-definition "${TASK_DEF}" \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration={subnets=[${SUBNETS}],securityGroups=[${SG}],assignPublicIp=DISABLED}"
+```
+
+上記は AWS CLI を直接叩く例です。GitHub Actions から `aws ecs run-task` を実行するワークフローを組むことで、自動的にマイグレーション → サービス更新という流れを構築できます。
 
 ## 補足：CI/CD 連携について
 現状はローカルで `terraform plan/apply` を実行する運用を想定しています。将来的に GitHub Actions や Terraform Cloud を利用して自動適用したい場合は、以下を追加検討してください。

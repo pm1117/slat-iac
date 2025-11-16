@@ -104,4 +104,16 @@ variable "python_container_port" {
   default     = 8000
 }
 
+variable "migration_image" {
+  description = "マイグレーション実行用コンテナイメージ URI（未指定なら NestJS イメージを使用）"
+  type        = string
+  default     = null
+}
+
+variable "migration_command" {
+  description = "マイグレーション実行時のコマンド（sh -c で実行）"
+  type        = string
+  default     = "npm run prisma migrate deploy"
+}
+
 
