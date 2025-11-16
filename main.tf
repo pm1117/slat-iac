@@ -12,4 +12,6 @@ locals {
     Environment = local.environment
     ManagedBy   = "terraform"
   }
+
+  migration_image = coalesce(var.migration_image, var.nestjs_image)
 }

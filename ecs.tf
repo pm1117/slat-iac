@@ -231,6 +231,47 @@ resource "aws_ecs_service" "python" {
   })
 }
 
+# GitHub Actions など外部から直接 RDS へ入らず、同一 VPC 内で安全に Prisma の migrate を実行するため。
+resource "aws_ecs_task_definition" "migration" {
+  family                   = "${local.project}-${local.environment}-migration"
+  cpu                      = "512"
+  memory                   = "1024"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task_execution.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "migration"
+      image     = local.migration_image
+      essential = true
+      command   = ["sh", "-c", var.migration_command]
+      environment = [
+        { name = "DATABASE_HOST", value = aws_db_instance.postgres.address },
+        { name = "DATABASE_PORT", value = tostring(aws_db_instance.postgres.port) },
+        { name = "DATABASE_NAME", value = var.db_name },
+        { name = "DATABASE_USER", value = var.db_username },
+        { name = "DATABASE_PASSWORD", value = var.db_password }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.ecs.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "migration"
+        }
+      }
+    }
+  ])
+
+  tags = merge(local.common_tags, {
+    Name = "${local.project}-${local.environment}-migration-td"
+  })
+
+  depends_on = [aws_db_instance.postgres]
+}
+
 # Lambda + Step Functions
 # 得意なこと-> イベント駆動（S3アップロード、API Gateway、EventBridge、キューなど）で瞬時に起動し、短時間の処理をさっと実行。
 # 適したユースケース-> 処理がバースト的・低頻度・定型的。
